@@ -140,6 +140,16 @@ CRAWLER_MAX_SLEEP_SEC = 2
 # 警告：禁用 SSL 验证将使所有流量暴露于中间人攻击风险，请勿在生产环境中开启。
 DISABLE_SSL_VERIFY = False
 
+# ==================== Obsidian 配置 ====================
+# 是否启用 Obsidian 模式 - 将爬取数据导出为 Obsidian vault 格式
+# 启用后，笔记保存为 Markdown 格式，媒体文件保存到 Attachments 文件夹
+ENABLE_OBSIDIAN_MODE = False
+
+# Obsidian vault 路径（本地 Obsidian 库的路径）
+# 例如: "C:\\Users\\YourName\\Documents\\MyVault" 或 "/Users/YourName/Documents/MyVault"
+# 如果为空，则使用 SAVE_DATA_PATH 作为基础路径
+OBSIDIAN_VAULT_PATH = ""
+
 from .bilibili_config import *
 from .xhs_config import *
 from .dy_config import *

@@ -42,24 +42,50 @@ from store.excel_store_base import ExcelStoreBase
 class XhsCsvStoreImplement(AbstractStore):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.writer = AsyncFileWriter(platform="xhs", crawler_type=crawler_type_var.get())
+        self.writer_cache = {}  # 缓存不同note_id的writer
 
     async def store_content(self, content_item: Dict):
         """
-        store content data to csv file
+        保存内容到CSV文件，每篇文章一个文件夹
         :param content_item:
         :return:
         """
-        await self.writer.write_to_csv(item_type="contents", item=content_item)
+        note_id = content_item.get("note_id")
+        title = content_item.get("title", "untitled")
+        
+        # 获取或创建该文章的writer
+        if note_id not in self.writer_cache:
+            self.writer_cache[note_id] = AsyncFileWriter(
+                platform="xhs", 
+                crawler_type=crawler_type_var.get(),
+                note_id=note_id,
+                title=title
+            )
+        
+        writer = self.writer_cache[note_id]
+        await writer.write_to_csv(item_type="contents", item=content_item)
 
     async def store_comment(self, comment_item: Dict):
         """
-        store comment data to csv file
+        保存评论到CSV文件，与对应文章放在同一文件夹
         :param comment_item:
         :return:
         """
-        await self.writer.write_to_csv(item_type="comments", item=comment_item)
-
+        note_id = comment_item.get("note_id")
+        if not note_id:
+            return
+            
+        # 获取或创建该文章的writer
+        if note_id not in self.writer_cache:
+            self.writer_cache[note_id] = AsyncFileWriter(
+                platform="xhs", 
+                crawler_type=crawler_type_var.get(),
+                note_id=note_id,
+                title="unknown"
+            )
+        
+        writer = self.writer_cache[note_id]
+        await writer.write_to_csv(item_type="comments", item=comment_item)
 
     async def store_creator(self, creator_item: Dict):
         pass
@@ -71,30 +97,57 @@ class XhsCsvStoreImplement(AbstractStore):
 class XhsJsonStoreImplement(AbstractStore):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.writer = AsyncFileWriter(platform="xhs", crawler_type=crawler_type_var.get())
+        self.writer_cache = {}  # 缓存不同note_id的writer
 
     async def store_content(self, content_item: Dict):
         """
-        store content data to json file
+        保存内容到JSON文件，每篇文章一个文件夹
         :param content_item:
         :return:
         """
-        await self.writer.write_single_item_to_json(item_type="contents", item=content_item)
+        note_id = content_item.get("note_id")
+        title = content_item.get("title", "untitled")
+        
+        # 获取或创建该文章的writer
+        if note_id not in self.writer_cache:
+            self.writer_cache[note_id] = AsyncFileWriter(
+                platform="xhs", 
+                crawler_type=crawler_type_var.get(),
+                note_id=note_id,
+                title=title
+            )
+        
+        writer = self.writer_cache[note_id]
+        await writer.write_single_item_to_json(item_type="contents", item=content_item)
 
     async def store_comment(self, comment_item: Dict):
         """
-        store comment data to json file
+        保存评论到JSON文件，与对应文章放在同一文件夹
         :param comment_item:
         :return:
         """
-        await self.writer.write_single_item_to_json(item_type="comments", item=comment_item)
+        note_id = comment_item.get("note_id")
+        if not note_id:
+            return
+            
+        # 获取或创建该文章的writer
+        if note_id not in self.writer_cache:
+            self.writer_cache[note_id] = AsyncFileWriter(
+                platform="xhs", 
+                crawler_type=crawler_type_var.get(),
+                note_id=note_id,
+                title="unknown"
+            )
+        
+        writer = self.writer_cache[note_id]
+        await writer.write_single_item_to_json(item_type="comments", item=comment_item)
 
     async def store_creator(self, creator_item: Dict):
         pass
 
     def flush(self):
         """
-        flush data to json file
+        刷新数据到JSON文件
         :return:
         """
         pass
@@ -104,13 +157,50 @@ class XhsJsonStoreImplement(AbstractStore):
 class XhsJsonlStoreImplement(AbstractStore):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.writer = AsyncFileWriter(platform="xhs", crawler_type=crawler_type_var.get())
+        self.writer_cache = {}  # 缓存不同note_id的writer
 
     async def store_content(self, content_item: Dict):
-        await self.writer.write_to_jsonl(item_type="contents", item=content_item)
+        """
+        保存内容到JSONL文件，每篇文章一个文件夹
+        :param content_item:
+        :return:
+        """
+        note_id = content_item.get("note_id")
+        title = content_item.get("title", "untitled")
+        
+        # 获取或创建该文章的writer
+        if note_id not in self.writer_cache:
+            self.writer_cache[note_id] = AsyncFileWriter(
+                platform="xhs", 
+                crawler_type=crawler_type_var.get(),
+                note_id=note_id,
+                title=title
+            )
+        
+        writer = self.writer_cache[note_id]
+        await writer.write_to_jsonl(item_type="contents", item=content_item)
 
     async def store_comment(self, comment_item: Dict):
-        await self.writer.write_to_jsonl(item_type="comments", item=comment_item)
+        """
+        保存评论到JSONL文件，与对应文章放在同一文件夹
+        :param comment_item:
+        :return:
+        """
+        note_id = comment_item.get("note_id")
+        if not note_id:
+            return
+            
+        # 获取或创建该文章的writer
+        if note_id not in self.writer_cache:
+            self.writer_cache[note_id] = AsyncFileWriter(
+                platform="xhs", 
+                crawler_type=crawler_type_var.get(),
+                note_id=note_id,
+                title="unknown"
+            )
+        
+        writer = self.writer_cache[note_id]
+        await writer.write_to_jsonl(item_type="comments", item=comment_item)
 
     async def store_creator(self, creator_item: Dict):
         pass
