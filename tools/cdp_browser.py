@@ -276,43 +276,64 @@ class CDPBrowserManager:
         ):
             raise RuntimeError(f"Browser failed to start within {config.BROWSER_LAUNCH_TIMEOUT} seconds")
 
-        # Extra wait for CDP service to fully start
-        await asyncio.sleep(1)
+        # Extra wait for CDP service to fully start (increased from 1s to 3s)
+        utils.logger.info("[CDPBrowserManager] Waiting for CDP service to fully initialize...")
+        await asyncio.sleep(3)
 
         # Test CDP connection
         if not await self._test_cdp_connection(self.debug_port):
             utils.logger.warning(
-                "[CDPBrowserManager] CDP connection test failed, but will continue to try connecting"
+                "[CDPBrowserManager] CDP port not yet accessible, but will continue to try connecting"
             )
 
     async def _get_browser_websocket_url(self, debug_port: int) -> str:
         """
-        Get browser WebSocket connection URL
+        Get browser WebSocket connection URL with retry mechanism
         """
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"http://localhost:{debug_port}/json/version", timeout=10
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    ws_url = data.get("webSocketDebuggerUrl")
-                    if ws_url:
-                        utils.logger.info(
-                            f"[CDPBrowserManager] Got browser WebSocket URL: {ws_url}"
-                        )
-                        return ws_url
+        max_retries = 3
+        retry_delay = 2  # seconds
+        timeout = 15  # Increased timeout for slower systems
+        
+        for attempt in range(max_retries):
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    url = f"http://localhost:{debug_port}/json/version"
+                    utils.logger.info(f"[CDPBrowserManager] Attempting to fetch WebSocket URL from {url} (attempt {attempt + 1}/{max_retries})")
+                    
+                    response = await client.get(url)
+                    
+                    if response.status_code == 200:
+                        data = response.json()
+                        ws_url = data.get("webSocketDebuggerUrl")
+                        if ws_url:
+                            utils.logger.info(
+                                f"[CDPBrowserManager] Got browser WebSocket URL: {ws_url}"
+                            )
+                            return ws_url
+                        else:
+                            raise RuntimeError("webSocketDebuggerUrl not found in response")
                     else:
-                        raise RuntimeError("webSocketDebuggerUrl not found")
+                        raise RuntimeError(f"HTTP {response.status_code}: {response.text}")
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    utils.logger.warning(
+                        f"[CDPBrowserManager] Failed to get WebSocket URL (attempt {attempt + 1}): {e}. "
+                        f"Retrying in {retry_delay}s..."
+                    )
+                    await asyncio.sleep(retry_delay)
                 else:
-                    raise RuntimeError(f"HTTP {response.status_code}: {response.text}")
-        except Exception as e:
-            utils.logger.error(f"[CDPBrowserManager] Failed to get WebSocket URL: {e}")
-            raise
+                    utils.logger.error(
+                        f"[CDPBrowserManager] Failed to get WebSocket URL after {max_retries} attempts: {e}"
+                    )
+                    raise RuntimeError(
+                        f"Cannot connect to browser on port {debug_port}. "
+                        f"Please ensure the browser launched successfully and CDP service is running. "
+                        f"Error: {e}"
+                    )
 
     async def _connect_via_cdp(self, playwright: Playwright):
         """
-        Connect to browser via CDP
+        Connect to browser via CDP with improved error handling
         """
         try:
             if config.CDP_CONNECT_EXISTING:
@@ -341,9 +362,13 @@ class CDPBrowserManager:
                     )
             else:
                 # For launched browser, get WebSocket URL first
+                utils.logger.info("[CDPBrowserManager] Retrieving browser WebSocket URL for CDP connection...")
                 ws_url = await self._get_browser_websocket_url(self.debug_port)
                 utils.logger.info(f"[CDPBrowserManager] Connecting to browser via CDP: {ws_url}")
-                self.browser = await playwright.chromium.connect_over_cdp(ws_url)
+                
+                # Use longer timeout for CDP connection
+                timeout_ms = max(config.BROWSER_LAUNCH_TIMEOUT * 1000, 30000)
+                self.browser = await playwright.chromium.connect_over_cdp(ws_url, timeout=timeout_ms)
 
             if self.browser.is_connected():
                 utils.logger.info("[CDPBrowserManager] Successfully connected to browser")
@@ -351,10 +376,19 @@ class CDPBrowserManager:
                     f"[CDPBrowserManager] Browser contexts count: {len(self.browser.contexts)}"
                 )
             else:
-                raise RuntimeError("CDP connection failed")
+                raise RuntimeError("CDP connection failed: Browser not connected")
 
         except Exception as e:
-            utils.logger.error(f"[CDPBrowserManager] CDP connection failed: {e}")
+            error_msg = (
+                f"[CDPBrowserManager] CDP connection failed: {e}\n"
+                f"Troubleshooting steps:\n"
+                f"1. Ensure browser is installed (Chrome or Edge)\n"
+                f"2. Check if CDP port {self.debug_port} is not blocked by firewall\n"
+                f"3. Try increasing BROWSER_LAUNCH_TIMEOUT in config\n"
+                f"4. Check system resources (CPU, memory)\n"
+                f"5. Try disabling browser extensions if using existing browser mode"
+            )
+            utils.logger.error(error_msg)
             raise
 
     async def _create_browser_context(
