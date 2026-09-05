@@ -696,6 +696,78 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
         )
         return result
 
+    async def get_self_note_collects(
+        self,
+        cursor: str = "",
+        num: int = 30,
+    ) -> Dict:
+        """
+        获取当前登录用户的个人收藏(单页)
+        对应小红书 Web 端「我的收藏」页面接口
+        Args:
+            cursor: 分页游标，首页传空字符串
+            num: 单页数量
+
+        Returns:
+            Dict: 收藏分页响应，包含 notes / has_more / cursor
+        """
+        uri = "/api/sns/web/v1/note/collect/page"
+        params = {
+            "num": num,
+            "cursor": cursor,
+        }
+        return await self.get(uri, params)
+
+    async def get_all_self_note_collects(
+        self,
+        crawl_interval: float = 1.0,
+        callback: Optional[Callable] = None,
+        max_count: int = 0,
+    ) -> List[Dict]:
+        """
+        分页拉取当前登录用户的全部个人收藏
+        Args:
+            crawl_interval: 每页爬取间隔(秒)
+            callback: 每页回调，签名 async callback(notes: List[Dict])
+            max_count: 最大拉取数量，0 表示不限制
+
+        Returns:
+            List[Dict]: 收藏笔记列表
+        """
+        result: List[Dict] = []
+        has_more = True
+        cursor = ""
+        while has_more:
+            res = await self.get_self_note_collects(cursor=cursor, num=30)
+            if not res:
+                utils.logger.warning(
+                    "[XiaoHongShuClient.get_all_self_note_collects] 收藏分页响应为空，结束拉取"
+                )
+                break
+
+            has_more = res.get("has_more", False)
+            cursor = res.get("cursor", "")
+            notes = res.get("notes", []) or []
+            utils.logger.info(
+                f"[XiaoHongShuClient.get_all_self_note_collects] 本页获取收藏 {len(notes)} 条，has_more={has_more}"
+            )
+
+            if callback:
+                await callback(notes)
+
+            result.extend(notes)
+
+            if max_count and len(result) >= max_count:
+                result = result[:max_count]
+                break
+
+            await asyncio.sleep(crawl_interval)
+
+        utils.logger.info(
+            f"[XiaoHongShuClient.get_all_self_note_collects] 收藏拉取完成，共 {len(result)} 条"
+        )
+        return result
+
     async def get_note_short_url(self, note_id: str) -> Dict:
         """
         Get note short URL

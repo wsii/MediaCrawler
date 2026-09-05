@@ -28,7 +28,7 @@ KEYWORDS = "编程副业,编程兼职"  # Keyword search configuration, separate
 LOGIN_TYPE = "qrcode"  # qrcode or phone or cookie
 COOKIES = ""
 CRAWLER_TYPE = (
-    "search"  # Crawling type, search (keyword search) | detail (post details) | creator (creator homepage data)
+    "search"  # Crawling type, search (keyword search) | detail (post details) | creator (creator homepage data) | favorites (sync personal collects of current login user, xhs only)
 )
 # Whether to enable IP proxy
 ENABLE_IP_PROXY = False

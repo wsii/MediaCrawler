@@ -76,7 +76,7 @@ if "%choice%"=="6" (
     set /p platform="输入平台 (xhs/dy/ks/bili/wb/tieba/zhihu) [默认: xhs]: "
     if "!platform!"=="" set platform=xhs
     
-    set /p type="输入爬虫类型 (search/detail/creator) [默认: search]: "
+    set /p type="输入爬虫类型 (search/detail/creator/favorites) [默认: search]: "
     if "!type!"=="" set type=search
     
     set /p keywords="输入关键词 [默认: 编程副业]: "

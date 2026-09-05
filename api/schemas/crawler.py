@@ -47,6 +47,7 @@ class CrawlerTypeEnum(str, Enum):
     SEARCH = "search"
     DETAIL = "detail"
     CREATOR = "creator"
+    FAVORITES = "favorites"  # 同步当前登录账号的个人收藏(xhs 专用)
 
 
 class SaveDataOptionEnum(str, Enum):

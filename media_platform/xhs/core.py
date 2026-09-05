@@ -48,6 +48,7 @@ from .exception import (
     NoteNotFoundError,
     PlatformAccessError,
 )
+from .favorites_sync import FavoritesSyncRecord
 from .field import SearchSortType
 from .help import parse_note_info_from_note_url, parse_creator_info_from_url, get_search_id
 from .login import XiaoHongShuLogin
@@ -126,6 +127,9 @@ class XiaoHongShuCrawler(AbstractCrawler):
             elif config.CRAWLER_TYPE == "creator":
                 # Get creator's information and their notes and comments
                 await self.get_creators_and_notes()
+            elif config.CRAWLER_TYPE == "favorites":
+                # Sync personal collects of current login user to local
+                await self.get_self_favorites()
             else:
                 pass
 
@@ -236,6 +240,94 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 note_ids.append(note_item.get("note_id"))
                 xsec_tokens.append(note_item.get("xsec_token"))
             await self.batch_get_note_comments(note_ids, xsec_tokens)
+
+    async def get_self_favorites(self) -> None:
+        """
+        同步当前登录用户的个人收藏到本地
+
+        - 通过 JSON 文件记录已同步的收藏链接，每次仅同步新增的收藏，已同步的跳过
+        - 同步内容包括笔记内容、图片和视频(需 config.ENABLE_GET_MEIDAS = True)
+        """
+        utils.logger.info("[XiaoHongShuCrawler.get_self_favorites] 开始同步个人收藏")
+
+        if not config.ENABLE_GET_MEIDAS:
+            utils.logger.warning(
+                "[XiaoHongShuCrawler.get_self_favorites] 检测到 ENABLE_GET_MEIDAS=False，"
+                "将不会下载图片/视频。如需同步媒体请在 config 中开启 ENABLE_GET_MEIDAS=True"
+            )
+
+        # 同步记录文件路径
+        sync_file = getattr(config, "XHS_FAVORITES_SYNC_RECORD_FILE", "") or os.path.join(
+            "data", "xhs", "favorites_synced.json"
+        )
+        sync_record = FavoritesSyncRecord(sync_file)
+        utils.logger.info(
+            f"[XiaoHongShuCrawler.get_self_favorites] 已加载同步记录: 已同步 {len(sync_record)} 条 -> {sync_file}"
+        )
+
+        max_count = getattr(config, "XHS_FAVORITES_MAX_NOTES_COUNT", 0) or 0
+        semaphore = asyncio.Semaphore(config.MAX_CONCURRENCY_NUM)
+        new_synced_count = 0
+
+        async def on_page(notes: List[Dict]):
+            nonlocal new_synced_count
+            for note_item in notes:
+                note_id = note_item.get("note_id")
+                if not note_id:
+                    continue
+                xsec_token = note_item.get("xsec_token", "")
+                xsec_source = note_item.get("xsec_source", "pc_collect") or "pc_collect"
+
+                # 构造收藏笔记的唯一链接，作为同步记录的去重 key
+                note_url = f"{self.index_url}/explore/{note_id}"
+                if xsec_token:
+                    note_url += f"?xsec_token={xsec_token}&xsec_source={xsec_source}"
+
+                if sync_record.contains(note_url):
+                    utils.logger.info(
+                        f"[XiaoHongShuCrawler.get_self_favorites] 跳过已同步收藏: {note_id}"
+                    )
+                    continue
+
+                # 拉取笔记详情
+                note_detail = await self.get_note_detail_async_task(
+                    note_id=note_id,
+                    xsec_source=xsec_source,
+                    xsec_token=xsec_token,
+                    semaphore=semaphore,
+                )
+                if not note_detail:
+                    utils.logger.warning(
+                        f"[XiaoHongShuCrawler.get_self_favorites] 获取笔记详情失败，跳过: {note_id}"
+                    )
+                    continue
+
+                # 保存笔记内容到本地存储(json/jsonl/...)
+                await xhs_store.update_xhs_note(note_detail)
+                # 下载图片和视频到本地
+                await self.get_notice_media(note_detail)
+
+                title = note_detail.get("title") or (note_detail.get("desc") or "")[:50]
+                sync_record.add(note_url=note_url, note_id=note_id, title=title)
+                # 每条同步后立即持久化，避免中断丢失进度
+                sync_record.save()
+                new_synced_count += 1
+                utils.logger.info(
+                    f"[XiaoHongShuCrawler.get_self_favorites] 新同步收藏: {note_id} "
+                    f"(本次新增 {new_synced_count} 条)"
+                )
+
+        await self.xhs_client.get_all_self_note_collects(
+            crawl_interval=config.CRAWLER_MAX_SLEEP_SEC,
+            callback=on_page,
+            max_count=max_count,
+        )
+
+        sync_record.save()
+        utils.logger.info(
+            f"[XiaoHongShuCrawler.get_self_favorites] 同步完成，本次新增 {new_synced_count} 条，"
+            f"总计已同步 {len(sync_record)} 条"
+        )
 
     async def fetch_creator_notes_detail(self, note_list: List[Dict]):
         """Concurrently obtain the specified post list and save the data"""

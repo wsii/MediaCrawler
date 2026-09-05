@@ -35,3 +35,14 @@ XHS_CREATOR_ID_LIST = [
     "https://www.xiaohongshu.com/user/profile/5f58bd990000000001003753?xsec_token=ABYVg1evluJZZzpMX-VWzchxQ1qSNVW3r-jOEnKqMcgZw=&xsec_source=pc_search"
     # ........................
 ]
+
+# ==================== 个人收藏同步配置 ====================
+# 仅在 CRAWLER_TYPE = "favorites" 时生效，同步当前登录账号的个人收藏到本地
+# (包含笔记内容、图片和视频，需同时开启 ENABLE_GET_MEIDAS = True 才会下载媒体)
+
+# 个人收藏同步记录文件路径 (JSON)，用于增量同步去重，已同步过的收藏链接会被跳过
+# 留空则默认保存到 data/xhs/favorites_synced.json
+XHS_FAVORITES_SYNC_RECORD_FILE = ""
+
+# 单次同步的最大收藏数量，0 表示不限制(拉取全部收藏)
+XHS_FAVORITES_MAX_NOTES_COUNT = 0

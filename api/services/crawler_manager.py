@@ -218,6 +218,9 @@ class CrawlerManager:
             cmd.extend(["--specified_id", config.specified_ids])
         elif config.crawler_type.value == "creator" and config.creator_ids:
             cmd.extend(["--creator_id", config.creator_ids])
+        elif config.crawler_type.value == "favorites":
+            # 个人收藏同步无需额外参数, 由 config.XHS_FAVORITES_* 控制
+            pass
 
         if config.start_page != 1:
             cmd.extend(["--start", str(config.start_page)])
